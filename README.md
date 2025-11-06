@@ -1,4 +1,8 @@
+### compile
 
+```bash
+gcc -std=c11 -o qr_cam main.c mjpeg_grabber.c -lpthread -ljpeg -lzbar
+```
 
 
 ### src/mjpeg_grabber.c
