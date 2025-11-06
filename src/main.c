@@ -9,7 +9,11 @@
 #include <stdlib.h>
 #include <time.h> // for nanosleep
 #include "server_communication.h"
+#include <stdatomic.h>
+#include <stdbool.h>
 
+
+static atomic_bool sending = ATOMIC_VAR_INIT(false);
 volatile sig_atomic_t stop_requested = 0;
 
 static void handle_sigint(int signum)
@@ -138,9 +142,18 @@ int main(void)
 
     while (!stop_requested)
     {
+        // If a send is in progress, wait here (do NOT call get_latest_jpeg_copy)
+        if (atomic_load(&sending))
+        {
+            // sleep short while send completes (adjust ms as needed)
+            msleep(100);
+            continue;
+        }
+
         uint8_t *jpeg = NULL;
         size_t jpeg_sz = 0;
 
+        // get latest jpeg (won't happen while sending==true because of check above)
         if (get_latest_jpeg_copy(&jpeg, &jpeg_sz) != 0)
         {
             // no frame yet -> wait a bit and retry
@@ -181,21 +194,31 @@ int main(void)
                 if (data)
                 {
                     printf("QR data: %s\n", data);
-                    if (send_qr_to_server(data) == 0)
+
+                    // Try to become the single sender.
+                    // If sending was false, this will atomically set it to true and succeed.
+                    bool expected = false;
+                    if (atomic_compare_exchange_strong(&sending, &expected, true))
                     {
-                        printf(" -> sent to server\n");
+                        // We now "own" the send slot. Do the blocking send.
+                        if (send_qr_to_server(data) == 0)
+                        {
+                            printf(" -> sent to server\n");
+                        }
+                        else
+                        {
+                            fprintf(stderr, " -> failed to send to server\n");
+                        }
+                        // release send slot so scanning resumes
+                        atomic_store(&sending, false);
                     }
                     else
                     {
-                        fprintf(stderr, " -> failed to send to server\n");
+                        // another send already in progress; skip sending this one
+                        fprintf(stderr, "Send in progress, skipping this QR\n");
                     }
                 }
             }
-        }
-        else
-        {
-            // uncomment next line to get "no QR" logs:
-            // printf("No QR found\n");
         }
 
         zbar_image_destroy(image);
@@ -205,6 +228,7 @@ int main(void)
         msleep(50);
     }
 
+    
     printf("Stopping...\n");
     server_comm_cleanup();
     zbar_image_scanner_destroy(scanner);
