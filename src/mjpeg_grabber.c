@@ -232,7 +232,7 @@ void stream_stop(void) {
 }
 
 // ------------ Demo main ------------
-int main(int argc, char **argv) {
+int mjpeg_grabber_demo_main(int argc, char **argv) {
     int w = (argc > 1) ? atoi(argv[1]) : 640;
     int h = (argc > 2) ? atoi(argv[2]) : 480;
     int f = (argc > 3) ? atoi(argv[3]) : 5;
