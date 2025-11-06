@@ -192,6 +192,28 @@ int grab_jpeg(const char *path) {
     return rc;
 }
 
+
+int get_latest_jpeg_copy(uint8_t **out_buf, size_t *out_sz) {
+    if (!out_buf || !out_sz) return -1;
+    *out_buf = NULL; *out_sz = 0;
+
+    pthread_mutex_lock(&frame_mu);
+    if (latest && latest_sz > 0) {
+        uint8_t *buf = (uint8_t*)malloc(latest_sz);
+        if (!buf) {
+            pthread_mutex_unlock(&frame_mu);
+            return -1;
+        }
+        memcpy(buf, latest, latest_sz);
+        *out_buf = buf;
+        *out_sz  = latest_sz;
+        pthread_mutex_unlock(&frame_mu);
+        return 0;
+    }
+    pthread_mutex_unlock(&frame_mu);
+    return -1; // no frame yet
+}
+
 void stream_stop(void) {
     if (cam_fd != -1) {
         // end reader thread by closing fd
