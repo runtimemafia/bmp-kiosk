@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include <jpeglib.h>
 #include <zbar.h>
-#include <unistd.h>   // for usleep()
 #include <string.h>   // for memcpy()
 #include <signal.h>
 #include <stdlib.h>
+#include <time.h>   // for nanosleep
 
 volatile sig_atomic_t stop_requested = 0;
 
@@ -15,6 +15,14 @@ static void handle_sigint(int signum) {
     (void)signum;
     stop_requested = 1;
 }
+
+static void msleep(int ms) {
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000000L;
+    nanosleep(&ts, NULL);
+}
+
 
 int decode_jpeg_to_gray(const uint8_t *jpeg, size_t jpeg_sz,
                         unsigned char **out_gray, int *w, int *h)
@@ -105,7 +113,7 @@ int main(void) {
 
         if (get_latest_jpeg_copy(&jpeg, &jpeg_sz) != 0) {
             // no frame yet -> wait a bit and retry
-            usleep(100 * 1000); // 100 ms
+            msleep(100); // 100 ms
             continue;
         }
 
@@ -114,7 +122,7 @@ int main(void) {
         if (decode_jpeg_to_gray(jpeg, jpeg_sz, &gray, &w, &h) != 0) {
             fprintf(stderr, "JPEG decode failed\n");
             free(jpeg);
-            usleep(50 * 1000);
+            msleep(50);
             continue;
         }
 
@@ -148,7 +156,7 @@ int main(void) {
         free(jpeg); // jpeg was malloc'd by get_latest_jpeg_copy
 
         // small sleep to avoid busy loop; adjust to desired responsiveness
-        usleep(50 * 1000); // 50 ms
+        msleep(50);
     }
 
     printf("Stopping...\n");
